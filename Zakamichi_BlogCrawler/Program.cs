@@ -8,10 +8,9 @@ using static Zakamichi_BlogCrawler.Zakamichi.Nogizaka;
 using static Zakamichi_BlogCrawler.Zakamichi.Bokuao;
 using static Zakamichi_BlogCrawler.Helper.TestTableBuilder;
 
-internal class Program
+class Program
 {
-
-    private static void Main_test()
+    private static void Main()
     {
         Console.OutputEncoding = Encoding.UTF8;
         bool exit = false;
@@ -19,38 +18,40 @@ internal class Program
         while (!exit)
         {
             DisplayMainMenu();
-            var key = Console.ReadKey(intercept: true).Key;
+            char chinput = GetUserInput();
 
-            switch (key)
+            switch (chinput)
             {
-                case ConsoleKey.H:
-                    Hinatazaka46_Crawler_Ver_2();
+                case 'h':
+                    Hinatazaka46_Crawler();
                     break;
-                case ConsoleKey.S:
-                    Sakurazaka46_Crawler_Ver_2();
+                case 's':
+                    Sakurazaka46_Crawler();
                     break;
-                case ConsoleKey.N:
-                    Nogizaka46_Crawler_Ver_2();
+                case 'n':
+                    Nogizaka46_Crawler();
                     break;
-                case ConsoleKey.B:
+                case 'b':
                     Bokuao_Crawler_Ver_2();
                     break;
-                case ConsoleKey.E:
+                case 'e':
                     ExportSingleMemberImages();
                     break;
-                case ConsoleKey.A:
-                    ExportDesiredMembersImages();
+                case 'a':
+                    ManageDesiredMembers();
                     break;
                 default:
                     Console.WriteLine("Unknown MainPage Command:");
                     break;
             }
+
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
         }
     }
 
     private static void DisplayMainMenu()
     {
-        Console.Clear();
         Console.WriteLine("Welcome. Please Select Function:");
         Console.WriteLine("h: load all Hinatazaka46 blog");
         Console.WriteLine("s: load all Sakurazaka46 blog");
@@ -61,9 +62,21 @@ internal class Program
         Console.WriteLine("================================================================================");
     }
 
+    private static char GetUserInput()
+    {
+        try
+        {
+            return Convert.ToChar(Console.ReadLine()[0]);
+        }
+        catch
+        {
+            return '\0';
+        }
+    }
+
     private static void ExportSingleMemberImages()
     {
-        Console.Clear();
+        List<Member> MemberNameList;
         Console.WriteLine("Select Group:");
         Console.WriteLine("h: Hinatazaka46");
         Console.WriteLine("s: Sakurazaka46");
@@ -71,442 +84,232 @@ internal class Program
         Console.WriteLine("b: Bokuao");
         Console.WriteLine("================================================================================");
 
-        var key = Console.ReadKey(intercept: true).Key;
-        var (memberList, imagesFilePath) = GetGroupData(key);
+        char chinput = GetUserInput();
 
-        if (memberList == null)
+        switch (chinput)
         {
-            Console.WriteLine("Unknown Command.");
-            return;
+            case 'h':
+                MemberNameList = GetMembers(Hinatazaka46_BlogStatus_FilePath);
+                break;
+            case 's':
+                MemberNameList = GetMembers(Sakurazaka46_BlogStatus_FilePath);
+                break;
+            case 'n':
+                MemberNameList = GetMembers(Nogizaka46_BlogStatus_FilePath);
+                break;
+            case 'b':
+                MemberNameList = GetMembers(Bokuao_BlogStatus_FilePath);
+                break;
+            default:
+                Console.WriteLine("Unknown Command.");
+                return;
         }
 
-        Console.Clear();
+        SelectAndExportMemberImages(MemberNameList);
+    }
+
+    private static void SelectAndExportMemberImages(List<Member> memberNameList)
+    {
         Console.WriteLine("Select Member:");
-        for (int i = 0; i < memberList.Count; i++)
+        foreach (var member in memberNameList.Select((m, i) => new { m.Name, Index = i }))
         {
-            Console.WriteLine($"{i + 1} : {memberList[i].Name}");
+            Console.WriteLine($"{member.Index + 1} : {member.Name}");
         }
         Console.WriteLine("================================================================================");
 
-        if (int.TryParse(Console.ReadLine(), out int num) && num > 0 && num <= memberList.Count)
-        {
-            var selectedMember = memberList[num - 1];
-            //ExecuteWithSpinner(() => Export_SingleMember_BlogImages(selectedMember));
-            Console.WriteLine($"Export Result: {selectedMember.Name} Success");
-        }
-        else
-        {
-            Console.WriteLine("Invalid selection.");
-        }
-    }
-
-    private static void ExportDesiredMembersImages()
-    {
-        bool desiredPageExit = false;
-        List<Member> fullMemberList = GetAllMembers();
-        while (!desiredPageExit)
-        {
-
-            List<string> selectedDesiredMembers = Load_Desired_MemberList();
-            DisplayMemberList(fullMemberList, selectedDesiredMembers);
-
-            Console.WriteLine("Select Function:");
-            Console.WriteLine("a: add desired member");
-            Console.WriteLine("r: remove desired member");
-            Console.WriteLine("e: Export");
-            Console.WriteLine("d: Export before Date");
-            Console.WriteLine("x: Exit");
-            Console.WriteLine("================================================================================");
-
-            var key = Console.ReadKey(intercept: true).Key;
-            switch (key)
-            {
-                case ConsoleKey.A:
-                    AddOrRemoveMember(fullMemberList, selectedDesiredMembers, true);
-                    break;
-                case ConsoleKey.R:
-                    AddOrRemoveMember(fullMemberList, selectedDesiredMembers, false);
-                    break;
-                case ConsoleKey.E:
-                    AddOrRemoveMember(fullMemberList, selectedDesiredMembers, true);
-                    break;
-
-            }
-        }
-    }
-
-    private static void AddOrRemoveMember(List<Member> Full_MemberList, List<string> Selected_Desired_Member,bool Add)
-    {
-        string action = Add ? "Add" : "Remove";
-        Console.WriteLine($"Select Member to {action}:");
         try
         {
-            string InputCmd = Console.ReadLine();
-            int Num = Convert.ToInt32(InputCmd);
-            if (Num > 0 && Num <= Full_MemberList.Count)
+            int num = Convert.ToInt32(Console.ReadLine());
+            if (num > 0 && num <= memberNameList.Count)
             {
-                Member SelectedMember = Full_MemberList[Num - 1];
-                string result = (Add ? Add_Desired_MemberList(SelectedMember.Name) : Remove_Desired_MemberList(SelectedMember.Name)) ? "Success" : "Fail";
-                Console.WriteLine($"Add {SelectedMember.Name} Result: {result}"); ;
+                Member selectedMember = memberNameList[num - 1];
+                ConsoleSpinner spinner = new() { Delay = 300 };
+                bool end = false;
+
+                Thread thread = new(() =>
+                {
+                    Export_SingleMember_BlogImages(selectedMember);
+                    Console.WriteLine($"Export Result: {selectedMember.Name} Success");
+                    end = true;
+                });
+
+                thread.Start();
+                while (!end) spinner.Turn(displayMsg: "Working ", sequenceCode: 5);
+                thread.Join();
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Unknown Command : {ex.Message}");
+            Console.WriteLine($"Unknown Command: {ex.Message}");
         }
     }
 
-    private static void DisplayMemberList(List<Member> Full_MemberList, List<string> Selected_Desired_Member)
+    private static void ManageDesiredMembers()
     {
-        List<string> MemberList_View = Full_MemberList.Select(selector: (member, Index) => $"{Index + 1} : {(Selected_Desired_Member.Any(m => m == member.Name) ? $"[{member.Name}]" : member.Name)}").ToList();
-        int columnCount = 5;
-        int rowCount = (int)Math.Ceiling((double)MemberList_View.Count / columnCount);
-        TableBuilder tb = new();
-        for (int index = 0; index < rowCount; index++)
+        bool desiredPageExit = false;
+
+        while (!desiredPageExit)
         {
-            List<string> columns = MemberList_View.Skip(index * columnCount).Take(Math.Min(MemberList_View.Count - index * columnCount, columnCount)).ToList();
-            while (columns.Count < columnCount)
+            List<Member> fullMemberList = GetFullMemberList();
+            List<string> selectedDesiredMembers = Load_Desired_MemberList();
+            List<string> memberListView = CreateMemberListView(fullMemberList, selectedDesiredMembers);
+
+            DisplayTable(memberListView);
+            DisplayDesiredMemberMenu();
+
+            char chinput = GetUserInput();
+
+            switch (chinput)
             {
-                columns.Add("");
+                case 'a':
+                    AddDesiredMember(fullMemberList);
+                    break;
+                case 'r':
+                    RemoveDesiredMember(fullMemberList);
+                    break;
+                case 'e':
+                    ExportDesiredMembers(fullMemberList, selectedDesiredMembers);
+                    break;
+                case 'd':
+                    ExportDesiredMembersBeforeDate(fullMemberList, selectedDesiredMembers);
+                    break;
+                case 'x':
+                    desiredPageExit = true;
+                    break;
+                default:
+                    Console.WriteLine("Unknown Command.");
+                    break;
             }
-            tb.AddRow(columns.ToArray());
         }
+    }
+
+    private static List<Member> GetFullMemberList()
+    {
+        return
+        [
+            .. GetMembers(Sakurazaka46_BlogStatus_FilePath),
+            .. GetMembers(Hinatazaka46_BlogStatus_FilePath),
+            .. GetMembers(Nogizaka46_BlogStatus_FilePath),
+            .. GetMembers(Bokuao_BlogStatus_FilePath),
+        ];
+    }
+
+    private static List<string> CreateMemberListView(List<Member> fullMemberList, List<string> selectedDesiredMembers)
+    {
+        return fullMemberList.Select((member, index) =>
+            $"{index + 1} : {(selectedDesiredMembers.Contains(member.Name) ? $"[{member.Name}]" : member.Name)}").ToList();
+    }
+
+    private static void DisplayTable(List<string> memberListView)
+    {
+        int columnCount = 5;
+        int rowCount = (int)Math.Ceiling((double)memberListView.Count / columnCount);
+        TableBuilder tb = new();
+
+        for (int i = 0; i < rowCount; i++)
+        {
+            List<string> columns = memberListView.Skip(i * columnCount).Take(columnCount).ToList();
+            while (columns.Count < columnCount) columns.Add("");
+            tb.AddRow([.. columns]);
+        }
+
         Console.Write(tb.Output());
     }
 
-    private static (List<Member> memberList, string imagesFilePath) GetGroupData(ConsoleKey key)
+    private static void DisplayDesiredMemberMenu()
     {
-        return key switch
-        {
-            ConsoleKey.H => (GetMembers(Hinatazaka46_BlogStatus_FilePath), Hinatazaka46_Images_FilePath),
-            ConsoleKey.S => (GetMembers(Sakurazaka46_BlogStatus_FilePath), Sakurazaka46_Images_FilePath),
-            ConsoleKey.N => (GetMembers(Nogizaka46_BlogStatus_FilePath), Nogizaka46_Images_FilePath),
-            ConsoleKey.B => (GetMembers(Bokuao_BlogStatus_FilePath), Bokuao_Images_FilePath),
-            _ => (null, null),
-        };
+        Console.WriteLine("Select Function:");
+        Console.WriteLine("a: add desired member");
+        Console.WriteLine("r: remove desired member");
+        Console.WriteLine("e: Export");
+        Console.WriteLine("d: Export before Date");
+        Console.WriteLine("x: Exit");
+        Console.WriteLine("================================================================================");
     }
 
-    private static List<Member> GetAllMembers()
+    private static void AddDesiredMember(List<Member> fullMemberList)
     {
-        List<Member> Full_MemberList = [
-                               .. GetMembers(Sakurazaka46_BlogStatus_FilePath),
-                                    .. GetMembers(Hinatazaka46_BlogStatus_FilePath),
-                                    .. GetMembers(Nogizaka46_BlogStatus_FilePath),
-                                    .. GetMembers(Bokuao_BlogStatus_FilePath)];
-        return Full_MemberList;
-    }
-
-
-    private static void Main()
-    {
-        Console.OutputEncoding = Encoding.UTF8;
-        char chinput;
-        bool exit = false;
-
-        while (!exit)
+        Console.WriteLine("Select Member to Add:");
+        try
         {
-            Console.WriteLine("Welcome.Please Select Function:");
-            Console.WriteLine("h: load all Hinatazaka46 blog");
-            Console.WriteLine("s: load all Sakurazaka46 blog");
-            Console.WriteLine("n: load all Nogizaka46 blog");
-            Console.WriteLine("b: load all Bokuao blog");
-            Console.WriteLine("e: Export all blog image of single Member");
-            Console.WriteLine("a: Export all blog image of desired Members");
-            Console.WriteLine("================================================================================");
-            try
+            int num = Convert.ToInt32(Console.ReadLine());
+            if (num > 0 && num <= fullMemberList.Count)
             {
-                chinput = Convert.ToChar(Console.ReadLine()[0]);
-                switch (chinput)
-                {
-                    case 'h':
-                        {
-                            Hinatazaka46_Crawler_Ver_2();
-                            break;
-                        }
-                    case 's':
-                        {
-                            Sakurazaka46_Crawler_Ver_2();
-                            break;
-                        }
-                    case 'n':
-                        {
-                            Nogizaka46_Crawler_Ver_2();
-                            break;
-                        }
-                    case 'b':
-                        {
-                            Bokuao_Crawler_Ver_2();
-                            break;
-                        }
-                    case 'e':
-                        {
-
-                            List<Member> MemberNameList = [];
-                            string Images_FilePath = "";
-                            Console.WriteLine("Select Group:");
-                            Console.WriteLine("h: Hinatazaka46");
-                            Console.WriteLine("s: Sakurazaka46");
-                            Console.WriteLine("n: Nogizaka46");
-                            Console.WriteLine("b: Bokuao");
-                            Console.WriteLine("================================================================================");
-                            chinput = Convert.ToChar(Console.ReadLine()[0]);
-
-                            if (chinput == 'h')
-                            {
-                                MemberNameList = GetMembers(Hinatazaka46_BlogStatus_FilePath);
-                                Images_FilePath = Hinatazaka46_Images_FilePath;
-
-                            }
-                            else if (chinput == 's')
-                            {
-                                MemberNameList = GetMembers(Sakurazaka46_BlogStatus_FilePath);
-                                Images_FilePath = Sakurazaka46_Images_FilePath;
-
-                            }
-                            else if (chinput == 'n')
-                            {
-                                MemberNameList = GetMembers(Nogizaka46_BlogStatus_FilePath);
-                                Images_FilePath = Nogizaka46_Images_FilePath;
-                            }
-                            else if (chinput == 'b')
-                            {
-                                MemberNameList = GetMembers(Bokuao_BlogStatus_FilePath);
-                                Images_FilePath = Bokuao_Images_FilePath;
-                            }
-                            else
-                            {
-                                Console.WriteLine("Unknown Command.");
-                                break;
-                            }
-
-
-                            Console.WriteLine("Select Member:");
-                            foreach (var member in MemberNameList.Select(member => member.Name).Select((str, i) => new { Value = str, Index = i }))
-                            {
-                                Console.WriteLine($"{member.Index + 1} : {member.Value}");
-                            }
-                            Console.WriteLine("================================================================================");
-                            try
-                            {
-                                string InputCmd = Console.ReadLine();
-                                int Num = Convert.ToInt32(InputCmd);
-                                if (Num > 0 && Num <= MemberNameList.Count)
-                                {
-                                    ConsoleSpinner spinner = new()
-                                    {
-                                        Delay = 300
-                                    };
-                                    bool end = false;
-                                    Thread thread = new(() =>
-                                    {
-                                        Member SelectedMember = MemberNameList.Find(member => member.Name == MemberNameList[Num - 1].Name);
-                                        Export_SingleMember_BlogImages(SelectedMember);
-                                        Console.WriteLine($"Export Result:{SelectedMember} Success"); ;
-                                        //Console.WriteLine($"Export Result:{(Export_Images_File(MemberNameList[Num - 1].Name, MemberNameList, Images_FilePath) ? "Success" : "Fail")}"); ;
-                                        end = true;
-                                    });
-                                    thread.Start();
-                                    while (!end)
-                                    {
-                                        spinner.Turn(displayMsg: "Working ", sequenceCode: 5);
-                                    }
-
-                                    thread.Join();
-
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                Console.WriteLine($"Unknown Command :　{ex.Message}");
-                            }
-                            break;
-                        }
-                    case 'a':
-                        {
-                            bool desiredPageExit = false;
-                            while (!desiredPageExit)
-                            {
-                                List<Member> Sakurazaka46_MemberList = GetMembers(Sakurazaka46_BlogStatus_FilePath);
-                                List<Member> Hinatazaka46_MemberList = GetMembers(Hinatazaka46_BlogStatus_FilePath);
-                                List<Member> Nogizaka46_MemberList = GetMembers(Nogizaka46_BlogStatus_FilePath);
-                                List<Member> Bokuao_MemberList = GetMembers(Bokuao_BlogStatus_FilePath);
-                                List<Member> Full_MemberList = [
-                                    .. GetMembers(Sakurazaka46_BlogStatus_FilePath),
-                                    .. GetMembers(Hinatazaka46_BlogStatus_FilePath),
-                                    .. GetMembers(Nogizaka46_BlogStatus_FilePath),
-                                    .. GetMembers(Bokuao_BlogStatus_FilePath)];
-
-                                List<string> Selected_Desired_Member = Load_Desired_MemberList();
-                                List<string> MemberList_View = Full_MemberList.Select(selector: (member, Index) => $"{Index + 1} : {(Selected_Desired_Member.Any(m => m == member.Name) ? $"[{member.Name}]" : member.Name)}").ToList();
-                                int columnCount = 5;
-                                int rowCount = (int)Math.Ceiling((double)MemberList_View.Count / columnCount);
-                                TableBuilder tb = new();
-                                for (int index = 0; index < rowCount; index++)
-                                {
-                                    List<string> columns = MemberList_View.Skip(index * columnCount).Take(Math.Min(MemberList_View.Count - index * columnCount, columnCount)).ToList();
-                                    while (columns.Count < columnCount)
-                                    {
-                                        columns.Add("");
-                                    }
-                                    tb.AddRow(columns.ToArray());
-                                }
-                                Console.Write(tb.Output());
-                                Console.WriteLine("Select Function:");
-                                Console.WriteLine("a: add desired member");
-                                Console.WriteLine("r: remove desired member");
-                                Console.WriteLine("e: Export");
-                                Console.WriteLine("d: Export before Date");
-
-                                Console.WriteLine("x: Exit");
-                                Console.WriteLine("================================================================================");
-
-
-                                chinput = Convert.ToChar(Console.ReadLine()[0]);
-                                switch (chinput)
-                                {
-                                    case 'a':
-                                        Console.WriteLine("Select Member to Add:");
-                                        try
-                                        {
-                                            string InputCmd = Console.ReadLine();
-                                            int Num = Convert.ToInt32(InputCmd);
-                                            if (Num > 0 && Num <= Full_MemberList.Count)
-                                            {
-                                                Member SelectedMember = Full_MemberList[Num - 1];
-                                                Console.WriteLine($"Add {SelectedMember.Name} Result: {(Add_Desired_MemberList(SelectedMember.Name) ? "Success" : "Fail")}"); ;
-                                            }
-                                        }
-                                        catch (Exception ex)
-                                        {
-                                            Console.WriteLine($"Unknown Command: {ex.Message}");
-                                        }
-                                        break;
-                                    case 'r':
-                                        Console.WriteLine("Select Member to Remove:");
-                                        try
-                                        {
-                                            string InputCmd = Console.ReadLine();
-                                            int Num = Convert.ToInt32(InputCmd);
-                                            if (Num > 0 && Num <= Full_MemberList.Count)
-                                            {
-                                                Member SelectedMember = Full_MemberList[Num - 1];
-                                                Console.WriteLine($"Add {SelectedMember.Name} Result: {(Remove_Desired_MemberList(SelectedMember.Name) ? "Success" : "Fail")}"); ;
-                                            }
-                                        }
-                                        catch (Exception ex)
-                                        {
-                                            Console.WriteLine($"Unknown Command : {ex.Message}");
-                                        }
-                                        break;
-                                    case 'e':
-                                        {
-                                            bool end = false;
-                                            ConsoleSpinner spinner = new()
-                                            {
-                                                Delay = 300
-                                            };
-                                            IEnumerable<Member> SelectedMembers = Full_MemberList.Where(member => Selected_Desired_Member.Contains(member.Name));
-                                            List<Thread> Threads = [];
-
-                                            foreach (Member SelectedMember in SelectedMembers)
-                                            {
-                                                Thread thread = new(() =>
-                                                {
-                                                    Export_SingleMember_BlogImages(SelectedMember);
-                                                    Console.WriteLine($"Export Result: {SelectedMember.Name} Success");
-                                                });
-                                                Threads.Add(thread);
-                                            }
-
-                                            foreach (Thread thread1 in Threads)
-                                            {
-                                                thread1.Start();
-                                            }
-
-                                            foreach (Thread thread1 in Threads)
-                                            {
-                                                thread1.Join();
-                                            }
-                                            end = true;
-                                            while (!end)
-                                            {
-                                                spinner.Turn(displayMsg: "Working ", sequenceCode: 5);
-                                            }
-                                            break;
-                                        }
-
-                                    case 'd':
-                                        {
-                                            Console.WriteLine("Enter the Date:");
-                                            string str = Console.ReadLine();
-                                            DateTime lastupdate = ParseDateTime(str, "yyyyMMdd");
-                                            if (lastupdate == DateTime.MinValue)
-                                            {
-                                                lastupdate = DateTime.Now.AddDays(-8);
-                                            }
-                                            bool end = false;
-                                            ConsoleSpinner spinner = new()
-                                            {
-                                                Delay = 300
-                                            };
-                                            IEnumerable<Member> SelectedMembers = Full_MemberList.Where(member => Selected_Desired_Member.Contains(member.Name));
-                                            List<Thread> Threads = [];
-
-                                            foreach (Member SelectedMember in SelectedMembers)
-                                            {
-                                                Thread thread = new(() =>
-                                                {
-                                                    Export_SingleMember_BlogImages(SelectedMember, lastupdate);
-                                                    Console.WriteLine($"Export Result: {SelectedMember.Name} Success");
-                                                });
-                                                Threads.Add(thread);
-                                            }
-
-                                            foreach (Thread thread1 in Threads)
-                                            {
-                                                thread1.Start();
-                                            }
-
-                                            foreach (Thread thread1 in Threads)
-                                            {
-                                                thread1.Join();
-                                            }
-                                            end = true;
-                                            while (!end)
-                                            {
-                                                spinner.Turn(displayMsg: "Working ", sequenceCode: 5);
-                                            }
-                                            break;
-                                        }
-                                    case 'p':
-                                        {
-
-                                            break;
-                                        }
-                                    case 'x':
-                                        {
-                                            desiredPageExit = true;
-                                            break;
-                                        }
-
-                                }
-
-                            }
-                            break;
-
-
-                        }
-                    default:
-                        Console.WriteLine("Unknown MainPage Command:");
-                        break;
-                }
+                Member selectedMember = fullMemberList[num - 1];
+                Console.WriteLine($"Add {selectedMember.Name} Result: {(Add_Desired_MemberList(selectedMember.Name) ? "Success" : "Fail")}");
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Unknown MainPage error:{ex}");
-            }
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Unknown Command: {ex.Message}");
         }
     }
+
+    private static void RemoveDesiredMember(List<Member> fullMemberList)
+    {
+        Console.WriteLine("Select Member to Remove:");
+        try
+        {
+            int num = Convert.ToInt32(Console.ReadLine());
+            if (num > 0 && num <= fullMemberList.Count)
+            {
+                Member selectedMember = fullMemberList[num - 1];
+                Console.WriteLine($"Remove {selectedMember.Name} Result: {(Remove_Desired_MemberList(selectedMember.Name) ? "Success" : "Fail")}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Unknown Command: {ex.Message}");
+        }
+    }
+
+    private static void ExportDesiredMembers(List<Member> fullMemberList, List<string> selectedDesiredMembers)
+    {
+        ConsoleSpinner spinner = new() { Delay = 300 };
+        bool end = false;
+
+        List<Thread> threads = fullMemberList
+            .Where(m => selectedDesiredMembers.Contains(m.Name))
+            .Select(selectedMember => new Thread(() =>
+            {
+                Export_SingleMember_BlogImages(selectedMember);
+                Console.WriteLine($"Export Result: {selectedMember.Name} Success");
+            }))
+            .ToList();
+
+        threads.ForEach(t => t.Start());
+        threads.ForEach(t => t.Join());
+
+        end = true;
+        while (!end) spinner.Turn(displayMsg: "Working ", sequenceCode: 5);
+    }
+
+    private static void ExportDesiredMembersBeforeDate(List<Member> fullMemberList, List<string> selectedDesiredMembers)
+    {
+        Console.WriteLine("Enter the Date:");
+        string dateInput = Console.ReadLine();
+        DateTime lastUpdate = ParseDateTime(dateInput, "yyyyMMdd");
+        if (lastUpdate == DateTime.MinValue) lastUpdate = DateTime.Now.AddDays(-8);
+
+        ConsoleSpinner spinner = new() { Delay = 300 };
+        bool end = false;
+
+        List<Thread> threads = fullMemberList
+            .Where(m => selectedDesiredMembers.Contains(m.Name))
+            .Select(selectedMember => new Thread(() =>
+            {
+                Export_SingleMember_BlogImages(selectedMember, lastUpdate);
+                Console.WriteLine($"Export Result: {selectedMember.Name} Success");
+            }))
+            .ToList();
+
+        threads.ForEach(t => t.Start());
+        threads.ForEach(t => t.Join());
+
+        end = true;
+        while (!end) spinner.Turn(displayMsg: "Working ", sequenceCode: 5);
+    }
+
+
 }
+
