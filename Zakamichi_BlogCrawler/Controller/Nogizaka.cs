@@ -7,7 +7,6 @@ namespace Zakamichi_BlogCrawler.Zakamichi
     public static class Nogizaka
     {
         private static Dictionary<string, Blog> Nogizaka46_Blogs = [];
-
         private static readonly Dictionary<string, List<string>> Nogizaka46_Members = new()
         {
             {"３期生", new List<string> {"伊藤理々杏", "岩本蓮加", "梅澤美波", "大園桃子", "久保史緒里", "阪口珠美", "佐藤楓", "中村麗乃", "向井葉月", "山下美月", "吉田綾乃クリスティー", "与田祐希"}},
@@ -15,12 +14,10 @@ namespace Zakamichi_BlogCrawler.Zakamichi
             {"新4期生", new List<string> {"黒見明香", "佐藤璃果", "林瑠奈", "松尾美佑", "弓木奈於"}},
             {"5期生", new List<string> {"五百城茉央", "池田瑛紗", "一ノ瀬美空", "井上和", "岡本姫奈", "小川彩", "奥田いろは", "川﨑桜", "菅原咲月", "冨里奈央", "中西アルノ"}}
         };
-
         private static readonly HashSet<string> AcceptedMemberList = new(
         [
             "久保史緒里", "池田瑛紗", "一ノ瀬美空", "井上和", "小川彩", "川﨑桜", "菅原咲月", "冨里奈央", "柴田柚菜", "田村真佑", "早川聖来", "松尾美佑"
         ]);
-
         private static void GetBlogsInfo(int threadId)
         {
             Uri uri = new($"https://www.nogizaka46.com/s/n46/api/list/blog?rw=1024&st={threadId * 1024}&callback=res");

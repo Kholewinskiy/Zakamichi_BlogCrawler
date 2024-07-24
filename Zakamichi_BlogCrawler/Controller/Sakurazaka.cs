@@ -9,7 +9,6 @@ namespace Zakamichi_BlogCrawler.Zakamichi
     class Sakurazaka
     {
         static readonly List<Blog> Sakurazaka46_Blogs = [];
-
         public static void Sakurazaka46_Crawler()
         {
             Sakurazaka46_Blogs.Clear();
@@ -25,41 +24,35 @@ namespace Zakamichi_BlogCrawler.Zakamichi
             articleThreads.ForEach(thread => thread.Join());
 
             Sakurazaka46_Blogs.Sort((a, b) => a.ID.CompareTo(b.ID));
+            IOrderedEnumerable<Blog> old_Sakurazaka46_Blogs = GetMembers(Hinatazaka46_BlogStatus_FilePath).SelectMany(member => member.BlogList).OrderBy(blog => blog.ID);
 
-            List<Member> newMembers = Sakurazaka46_Blogs
-                .GroupBy(blog => blog.Name)
-                .Select(group => new Member
-                {
-                    Name = group.Key,
-                    Group = IdolGroup.Sakurazaka46.ToString(),
-                    BlogList = [.. group]
-                })
-                .ToList();
+            IEnumerable<Blog> diff = Sakurazaka46_Blogs.Where(predicate: blog => !old_Sakurazaka46_Blogs.Any(old_Blog => old_Blog.ID == blog.ID));
 
-            List<Member> oldMembers = GetMembers(Sakurazaka46_BlogStatus_FilePath);
-            List<Member> difference = newMembers
-                .Where(newMember => oldMembers.All(oldMember => oldMember.Name != newMember.Name ||
-                    newMember.BlogList.Any(newBlog => oldMember.BlogList.All(oldBlog => oldBlog.ID != newBlog.ID))))
-                .ToList();
-
-            if (difference.Count != 0)
+            if (diff.Any())
             {
-                List<Blog> allBlogs = difference.SelectMany(m => m.BlogList).ToList();
-                int blogsPerThread = (allBlogs.Count + threadCount - 1) / threadCount;
+                int blogsPerThread = Math.Max(diff.Count() / threadCount, diff.Count() % threadCount);
+                List<Thread> mainThreads = [];
 
-                List<Thread> mainThreads = Enumerable.Range(0, threadCount)
-                    .Select(i =>
-                    {
-                        var threadBlogs = allBlogs.Skip(i * blogsPerThread).Take(blogsPerThread).ToList();
-                        return SaveBlogAllImage(threadBlogs, Sakurazaka46_Images_FilePath, Sakurazaka46_HomePage);
-                    })
-                    .ToList();
+                for (int i = 0; i < threadCount; i++)
+                {
+                    int takeBlogsCount = Math.Min(diff.Count() - i * blogsPerThread, blogsPerThread);
+                    if (takeBlogsCount <= 0) break;
+                    List<Blog> threadBlogs = diff.Skip(i * blogsPerThread).Take(takeBlogsCount).ToList();
+                    mainThreads.Add(SaveBlogAllImage(threadBlogs, Sakurazaka46_Images_FilePath, string.Empty));
+                }
 
-                mainThreads.ForEach(thread => thread.Start());
-                mainThreads.ForEach(thread => thread.Join());
+                mainThreads.ForEach(t => t.Start());
+                mainThreads.ForEach(t => t.Join());
             }
+            IEnumerable<Member> newMembers = Sakurazaka46_Blogs.GroupBy(blog => blog.Name).Select(group => new Member
+            {
+                Name = group.Key,
+                Group = IdolGroup.Sakurazaka46.ToString(),
+                BlogList = [.. group]
+            });
 
-            var jsonString = JsonSerializer.Serialize(newMembers, jsonSerializerOptions);
+
+            string jsonString = JsonSerializer.Serialize(newMembers, jsonSerializerOptions);
             File.WriteAllText(Sakurazaka46_BlogStatus_FilePath, jsonString);
             Sakurazaka46_Blogs.Clear();
         }
