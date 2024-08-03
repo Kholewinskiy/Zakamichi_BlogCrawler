@@ -266,14 +266,14 @@ namespace Zakamichi_BlogCrawler
             {
                 Console.WriteLine($@"Load_Desired_MemberList error: {ex.Message}");
             }
-            return new List<string>();
+            return [];
         }
 
         public static bool Add_Desired_MemberList(string MemberName)
         {
             try
             {
-                List<string> Desired_MemberList = new();
+                List<string> Desired_MemberList = [];
                 if (File.Exists(Desired_MemberList_FilePath))
                 {
                     Desired_MemberList = JsonSerializer.Deserialize<List<string>>(File.ReadAllText(Desired_MemberList_FilePath), jsonSerializerOptions);

@@ -18,14 +18,14 @@ namespace Zakamichi_BlogCrawler.Zakamichi
         [
             "久保史緒里", "池田瑛紗", "一ノ瀬美空", "井上和", "小川彩", "川﨑桜", "菅原咲月", "冨里奈央", "柴田柚菜", "田村真佑", "早川聖来", "松尾美佑"
         ]);
-        private static void GetBlogsInfo(int threadId)
+        private static bool GetBlogsInfo(int threadId)
         {
             Uri uri = new($"https://www.nogizaka46.com/s/n46/api/list/blog?rw=1024&st={threadId * 1024}&callback=res");
             Nogizaka46_BlogList blogList = GetHttpGetResponse(uri);
             if (blogList.data == null)
             {
                 Console.WriteLine("end");
-                return;
+                return false;
             }
 
             foreach (Nogizaka46_BlogData blogData in blogList.data)
@@ -54,18 +54,24 @@ namespace Zakamichi_BlogCrawler.Zakamichi
                 else
                 {
                     Console.WriteLine($"Duplicate Blog Id {blog.ID} for Member {blog.Name} found on Page {threadId}");
-                    break;
+                    return false;
                 }
             }
+            return true;
         }
 
         public static void Nogizaka46_Crawler()
         {
+
+            Nogizaka46_Blogs = GetMembers(Nogizaka46_BlogStatus_FilePath).SelectMany(member => member.BlogList).ToDictionary(blog => blog.ID);
             int threadNumber = Environment.ProcessorCount;
 
             for (int threadId = 0; threadId < threadNumber; threadId++)
             {
-                GetBlogsInfo(threadId);
+               bool keepLoop =  GetBlogsInfo(threadId);
+                if (!keepLoop) {
+                    break;
+                }
             }
 
             Nogizaka46_Blogs = Nogizaka46_Blogs.OrderBy(kv => kv.Value.DateTime).ToDictionary(x => x.Key, x => x.Value);

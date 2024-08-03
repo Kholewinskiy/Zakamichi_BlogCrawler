@@ -10,8 +10,62 @@ using static Zakamichi_BlogCrawler.Helper.TestTableBuilder;
 
 class Program
 {
+
+    // Determine if a character is a CJK character
+    static bool IsDoubleWidth(char c)
+    {
+
+        // CJK Unified Ideographs
+        if (c >= 0x4E00 && c <= 0x9FFF) return true;
+        // CJK Unified Ideographs Extension A
+        if (c >= 0x3400 && c <= 0x4DBF) return true;
+        // CJK Unified Ideographs Extension B
+        if (c >= 0x20000 && c <= 0x2A6DF) return true;
+        // CJK Unified Ideographs Extension C
+        if (c >= 0x2A700 && c <= 0x2B73F) return true;
+        // CJK Unified Ideographs Extension D
+        if (c >= 0x2B740 && c <= 0x2B81F) return true;
+        // CJK Unified Ideographs Extension E
+        if (c >= 0x2B820 && c <= 0x2CEAF) return true;
+        // CJK Compatibility Ideographs
+        if (c >= 0xF900 && c <= 0xFAFF) return true;
+        // CJK Compatibility Ideographs Supplement
+        if (c >= 0x2F800 && c <= 0x2FA1F) return true;
+        // Enclosed CJK Letters and Months
+        if (c >= 0x3200 && c <= 0x32FF) return true;
+        // CJK Compatibility
+        if (c >= 0x3300 && c <= 0x33FF) return true;
+        // Full-width and half-width forms
+        if (c >= 0xFF00 && c <= 0xFFEF) return true;
+        // Hiragana and Katakana
+        if (c >= 0x3040 && c <= 0x309F) return true;
+        if (c >= 0x30A0 && c <= 0x30FF) return true;
+        // Hangul Jamo
+        if (c >= 0x1100 && c <= 0x11FF) return true;
+        // Hangul Syllables
+        if (c >= 0xAC00 && c <= 0xD7AF) return true;
+
+        // Additional ranges for punctuation and symbols
+        // General Punctuation
+        if (c >= 0x2000 && c <= 0x206F) return true;
+        // CJK Symbols and Punctuation
+        if (c >= 0x3000 && c <= 0x303F) return true;
+        // Half-width and Full-width Forms
+        if (c >= 0xFF00 && c <= 0xFFEF) return true;
+
+        return false;
+    }
+
+    // Pad a string to a specified width
+    static string PadString(string input, int width)
+    {
+        int inputWidth = input.Sum(c => IsDoubleWidth(c) ? 2 : 1);
+        return input + new string(' ', width - inputWidth);
+    }
     private static void Main()
     {
+      
+
         Console.OutputEncoding = Encoding.UTF8;
         bool exit = false;
 
@@ -197,25 +251,43 @@ class Program
     private static List<string> CreateMemberListView(List<Member> fullMemberList, List<string> selectedDesiredMembers)
     {
         return fullMemberList.Select((member, index) =>
-            $"{index + 1} : {(selectedDesiredMembers.Contains(member.Name) ? $"[{member.Name}]" : member.Name)}").ToList();
+            $"{index + 1}.{(selectedDesiredMembers.Contains(member.Name) ? $"[{member.Name}]" : member.Name)}").ToList();
     }
-
     private static void DisplayTable(List<string> memberListView)
     {
         int columnCount = 5;
         int rowCount = (int)Math.Ceiling((double)memberListView.Count / columnCount);
-        TableBuilder tb = new();
+        var table = new List<List<string>>();
 
         for (int i = 0; i < rowCount; i++)
         {
-            List<string> columns = memberListView.Skip(i * columnCount).Take(columnCount).ToList();
-            while (columns.Count < columnCount) columns.Add("");
-            tb.AddRow([.. columns]);
+            table.Add(memberListView.Skip(i * columnCount).Take(columnCount).ToList());
         }
 
-        Console.Write(tb.Output());
-    }
+        // Calculate column widths
+        int[] columnWidths = new int[columnCount];
+        foreach (List<string> row in table)
+        {
+            for (int i = 0; i < row.Count; i++)
+            {
+                int columnWidth = row[i].Sum(c => IsDoubleWidth(c) ? 2 : 1); // Calculate width considering CJK characters
+                if (columnWidths[i] < columnWidth)
+                {
+                    columnWidths[i] = columnWidth;
+                }
+            }
+        }
 
+        // Print the table
+        foreach (var row in table)
+        {
+            for (int i = 0; i < row.Count; i++)
+            {
+                Console.Write(PadString(row[i], columnWidths[i] + 1)); // Pad each cell
+            }
+            Console.WriteLine();
+        }
+    }
     private static void DisplayDesiredMemberMenu()
     {
         Console.WriteLine("Select Function:");
@@ -309,7 +381,5 @@ class Program
         end = true;
         while (!end) spinner.Turn(displayMsg: "Working ", sequenceCode: 5);
     }
-
-
 }
 

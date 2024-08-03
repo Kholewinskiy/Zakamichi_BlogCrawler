@@ -85,21 +85,17 @@ namespace Zakamichi_BlogCrawler.Zakamichi
             articleThreads.ForEach(t => t.Join());
             Hinatazaka46_Blogs.Sort((a, b) => a.ID.CompareTo(b.ID));
 
-            IOrderedEnumerable<Blog> old_Hinatazaka46_Blogs =
-                GetMembers(Hinatazaka46_BlogStatus_FilePath)
-                .SelectMany(member => member.BlogList)
-                .OrderBy(blog => blog.ID);
+            List<Blog> old_Hinatazaka46_Blogs = [.. GetMembers(Hinatazaka46_BlogStatus_FilePath).SelectMany(member => member.BlogList).OrderBy(blog => blog.ID)];
+            List<Blog> diff = [.. Hinatazaka46_Blogs.Where(predicate: blog => !old_Hinatazaka46_Blogs.Any(old_Blog => old_Blog.ID == blog.ID))];
 
-            IEnumerable<Blog> diff = Hinatazaka46_Blogs.Where(predicate: blog => !old_Hinatazaka46_Blogs.Any(old_Blog => old_Blog.ID == blog.ID));
-
-            if (diff.Any())
+            if (diff.Count > 0)
             {
-                int blogsPerThread = Math.Max(diff.Count() / threadCount, diff.Count() % threadCount);
+                int blogsPerThread = Math.Max(diff.Count / threadCount, diff.Count % threadCount);
                 List<Thread> mainThreads = [];
 
                 for (int i = 0; i < threadCount; i++)
                 {
-                    int takeBlogsCount = Math.Min(diff.Count() - i * blogsPerThread, blogsPerThread);
+                    int takeBlogsCount = Math.Min(diff.Count - i * blogsPerThread, blogsPerThread);
                     if (takeBlogsCount <= 0) break;
                     List<Blog> threadBlogs = diff.Skip(i * blogsPerThread).Take(takeBlogsCount).ToList();
                     mainThreads.Add(SaveBlogAllImage(threadBlogs, Hinatazaka46_Images_FilePath, string.Empty));

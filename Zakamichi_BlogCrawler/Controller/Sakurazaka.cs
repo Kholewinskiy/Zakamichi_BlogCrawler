@@ -16,29 +16,26 @@ namespace Zakamichi_BlogCrawler.Zakamichi
             Console.WriteLine($"Old Blog total: {Sakurazaka46_Blogs.Count}");
 
             int threadCount = Environment.ProcessorCount;
-            List<Thread> articleThreads = Enumerable.Range(0, threadCount)
-                .Select(threadId => EnableThread(threadId, threadCount))
-                                           .ToList();
+            List<Thread> articleThreads = Enumerable.Range(0, threadCount).Select(threadId => EnableThread(threadId, threadCount)).ToList();
 
             articleThreads.ForEach(thread => thread.Start());
             articleThreads.ForEach(thread => thread.Join());
 
             Sakurazaka46_Blogs.Sort((a, b) => a.ID.CompareTo(b.ID));
-            IOrderedEnumerable<Blog> old_Sakurazaka46_Blogs = GetMembers(Hinatazaka46_BlogStatus_FilePath).SelectMany(member => member.BlogList).OrderBy(blog => blog.ID);
+            List<Blog> old_Sakurazaka46_Blogs = [.. GetMembers(Sakurazaka46_BlogStatus_FilePath).SelectMany(member => member.BlogList).OrderBy(blog => blog.ID)];
+            List<Blog> diff = [.. Sakurazaka46_Blogs.Where(predicate: blog => !old_Sakurazaka46_Blogs.Any(old_Blog => old_Blog.ID == blog.ID))];
 
-            IEnumerable<Blog> diff = Sakurazaka46_Blogs.Where(predicate: blog => !old_Sakurazaka46_Blogs.Any(old_Blog => old_Blog.ID == blog.ID));
-
-            if (diff.Any())
+            if (diff.Count > 0)
             {
-                int blogsPerThread = Math.Max(diff.Count() / threadCount, diff.Count() % threadCount);
+                int blogsPerThread = Math.Max(diff.Count / threadCount, diff.Count % threadCount);
                 List<Thread> mainThreads = [];
 
                 for (int i = 0; i < threadCount; i++)
                 {
-                    int takeBlogsCount = Math.Min(diff.Count() - i * blogsPerThread, blogsPerThread);
+                    int takeBlogsCount = Math.Min(diff.Count - i * blogsPerThread, blogsPerThread);
                     if (takeBlogsCount <= 0) break;
                     List<Blog> threadBlogs = diff.Skip(i * blogsPerThread).Take(takeBlogsCount).ToList();
-                    mainThreads.Add(SaveBlogAllImage(threadBlogs, Sakurazaka46_Images_FilePath, string.Empty));
+                    mainThreads.Add(SaveBlogAllImage(threadBlogs, Sakurazaka46_Images_FilePath, Sakurazaka46_HomePage));
                 }
 
                 mainThreads.ForEach(t => t.Start());
@@ -50,7 +47,6 @@ namespace Zakamichi_BlogCrawler.Zakamichi
                 Group = IdolGroup.Sakurazaka46.ToString(),
                 BlogList = [.. group]
             });
-
 
             string jsonString = JsonSerializer.Serialize(newMembers, jsonSerializerOptions);
             File.WriteAllText(Sakurazaka46_BlogStatus_FilePath, jsonString);
