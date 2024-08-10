@@ -1,11 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Drawing.Imaging;
-using System.Globalization;
-using System.IO;
+﻿using System.Globalization;
 using System.Net;
-using System.Net.Mime;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -181,6 +175,85 @@ namespace Zakamichi_BlogCrawler
                 htmlDocument.LoadHtml(resultHtmlCode);
             }
             return htmlDocument;
+        }
+
+        public static void SaveAllBlogImages(List<Blog> blogList, string imagesFilePath, string homePageUrl)
+        {
+            int threadCount = Environment.ProcessorCount;
+            List<ImageContent> images = blogList.SelectMany(blog => blog.ImageList.Select(remoteFileUrl => new ImageContent
+            {
+                FileUrl = $"{homePageUrl}{remoteFileUrl}",
+                FilePath = $@"{imagesFilePath}\{blog.Name}\{blog.ID}\",
+                DateTime = blog.DateTime,
+                BlogId = blog.ID,
+                BlogTitle = blog.Title,
+                BlogImageCount = blog.ImageList.Count,
+                MemberName = blog.Name
+            })).ToList();
+
+            int imagesPerThread = (int)Math.Ceiling((double)images.Count / threadCount);
+            bool result = true;
+
+            List<Thread> mainThreads = Enumerable.Range(0, threadCount)
+                .Select(i => new Thread(() =>
+                {
+                    foreach (ImageContent imageContent in images.Skip(i * imagesPerThread).Take(imagesPerThread))
+                    {
+                        if (!Directory.Exists(imageContent.FilePath))
+                            Directory.CreateDirectory(imageContent.FilePath);
+
+                        result &= SaveImage(imageContent.FileUrl, imageContent.FilePath, imageContent.DateTime);
+                        if (!result)
+                        {
+                            Console.ForegroundColor = ConsoleColor.Red;
+                            Console.WriteLine($"Saved {imageContent.MemberName} blog {imageContent.BlogId} [{imageContent.BlogTitle}] update on {imageContent.DateTime:yyyy-MM-dd} Fail on Image {imageContent.FileUrl}");
+                            Console.ForegroundColor = ConsoleColor.White;
+                            break;
+                        }
+                        if (imageContent.BlogImageCount == Directory.EnumerateFiles(imageContent.FilePath).Count())
+                        {
+                            Console.ForegroundColor = ConsoleColor.Green;
+                            Console.WriteLine($"Saved {imageContent.MemberName} blog {imageContent.BlogId} [{imageContent.BlogTitle}] update on {imageContent.DateTime:yyyy-MM-dd} ImageCount:{imageContent.BlogImageCount}");
+                            Console.ForegroundColor = ConsoleColor.White;
+                        }
+                    }
+                }))
+                .ToList();
+
+            StartAndJoinThreads(mainThreads);
+
+            if (result)
+            {
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine("All Images Saved");
+                Console.ForegroundColor = ConsoleColor.White;
+            }
+        }
+
+        public static void SaveBlogsToFile(Dictionary<string, Blog> BlogList, string GroupName, string BlogStatus_FilePath)
+        {
+            IEnumerable<Member> newMembers = BlogList.Values
+                .GroupBy(blog => blog.Name)
+                .Select(group => new Member
+                {
+                    Name = group.Key,
+                    Group = GroupName,
+                    BlogList = [.. group]
+                });
+
+            string jsonString = JsonSerializer.Serialize(newMembers, jsonSerializerOptions);
+            File.WriteAllText(BlogStatus_FilePath, jsonString);
+        }
+
+        public static void StartAndJoinThreads(List<Thread> threads)
+        {
+            threads.ForEach(thread => thread.Start());
+            threads.ForEach(thread => thread.Join());
+        }
+
+        public static Dictionary<string, Blog> LoadExistingBlogs(string BlogStatus_FilePath)
+        {
+            return GetMembers(BlogStatus_FilePath).SelectMany(member => member.BlogList).ToDictionary(blog => blog.ID);
         }
 
         public static Thread SaveBlogAllImage(List<Blog> BlogList, string Images_FilePath, string HomePage_Url)

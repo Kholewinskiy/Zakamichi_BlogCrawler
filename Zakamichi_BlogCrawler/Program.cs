@@ -86,7 +86,7 @@ class Program
                     Nogizaka46_Crawler();
                     break;
                 case 'b':
-                    Bokuao_Crawler_Ver_2();
+                    Bokuao_Crawler();
                     break;
                 case 'e':
                     ExportSingleMemberImages();

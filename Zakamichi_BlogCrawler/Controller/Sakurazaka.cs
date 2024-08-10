@@ -1,69 +1,46 @@
 ﻿using HtmlAgilityPack;
-using System.Text.Json;
 using static Zakamichi_BlogCrawler.Global;
 using Zakamichi_BlogCrawler.Model;
-using System.Threading;
 
 namespace Zakamichi_BlogCrawler.Zakamichi
 {
     class Sakurazaka
     {
-        static readonly List<Blog> Sakurazaka46_Blogs = [];
+        private static Dictionary<string, Blog> Blogs = [];
+        private static readonly List<Blog> newBlogs = [];
         public static void Sakurazaka46_Crawler()
         {
-            Sakurazaka46_Blogs.Clear();
-            Sakurazaka46_Blogs.AddRange(GetMembers(Sakurazaka46_BlogStatus_FilePath).SelectMany(member => member.BlogList));
-            Console.WriteLine($"Old Blog total: {Sakurazaka46_Blogs.Count}");
-
+            Blogs = LoadExistingBlogs(Sakurazaka46_BlogStatus_FilePath);
             int threadCount = Environment.ProcessorCount;
-            List<Thread> articleThreads = Enumerable.Range(0, threadCount).Select(threadId => EnableThread(threadId, threadCount)).ToList();
 
-            articleThreads.ForEach(thread => thread.Start());
-            articleThreads.ForEach(thread => thread.Join());
+            List<Thread> articleThreads = Enumerable.Range(0, threadCount)
+                                           .Select(threadId => new Thread(() => ProcessPages(threadId, threadCount)))
+                                           .ToList();
 
-            Sakurazaka46_Blogs.Sort((a, b) => a.ID.CompareTo(b.ID));
-            List<Blog> old_Sakurazaka46_Blogs = [.. GetMembers(Sakurazaka46_BlogStatus_FilePath).SelectMany(member => member.BlogList).OrderBy(blog => blog.ID)];
-            List<Blog> diff = [.. Sakurazaka46_Blogs.Where(predicate: blog => !old_Sakurazaka46_Blogs.Any(old_Blog => old_Blog.ID == blog.ID))];
+            StartAndJoinThreads(articleThreads);
 
-            if (diff.Count > 0)
+            if (newBlogs.Count > 0)
             {
-                int blogsPerThread = Math.Max(diff.Count / threadCount, diff.Count % threadCount);
-                List<Thread> mainThreads = [];
-
-                for (int i = 0; i < threadCount; i++)
-                {
-                    int takeBlogsCount = Math.Min(diff.Count - i * blogsPerThread, blogsPerThread);
-                    if (takeBlogsCount <= 0) break;
-                    List<Blog> threadBlogs = diff.Skip(i * blogsPerThread).Take(takeBlogsCount).ToList();
-                    mainThreads.Add(SaveBlogAllImage(threadBlogs, Sakurazaka46_Images_FilePath, Sakurazaka46_HomePage));
-                }
-
-                mainThreads.ForEach(t => t.Start());
-                mainThreads.ForEach(t => t.Join());
+                SaveAllBlogImages(newBlogs, Sakurazaka46_Images_FilePath, Sakurazaka46_HomePage);
+                SaveBlogsToFile(Blogs, IdolGroup.Sakurazaka46.ToString(), Sakurazaka46_BlogStatus_FilePath);
             }
-            IEnumerable<Member> newMembers = Sakurazaka46_Blogs.GroupBy(blog => blog.Name).Select(group => new Member
-            {
-                Name = group.Key,
-                Group = IdolGroup.Sakurazaka46.ToString(),
-                BlogList = [.. group]
-            });
 
-            string jsonString = JsonSerializer.Serialize(newMembers, jsonSerializerOptions);
-            File.WriteAllText(Sakurazaka46_BlogStatus_FilePath, jsonString);
-            Sakurazaka46_Blogs.Clear();
+            Blogs.Clear();
+            newBlogs.Clear();
         }
 
-        private static Thread EnableThread(int threadId, int threadCount)
+        private static void ProcessPages(int threadId, int threadCount)
         {
-            return new Thread(() =>
+            for (int currentPage = threadId; currentPage <= 1000; currentPage += threadCount)
             {
-                for (int currentPage = threadId; currentPage <= 1000; currentPage += threadCount)
+                try
                 {
                     Console.WriteLine($"Processing Page {currentPage}");
                     string url = $"{Sakurazaka46_HomePage}/s/s46/diary/blog/list?ima=0000&page={currentPage}";
-                    HtmlDocument htmlDocument = GetHtmlDocument(url);
+                    var htmlDocument = GetHtmlDocument(url);
 
-                    if (htmlDocument?.DocumentNode?.SelectNodes("//li[@class='box']") is { } htmlNodeCollection)
+                    HtmlNodeCollection htmlNodeCollection = htmlDocument?.DocumentNode.SelectNodes("//li[@class='box']");
+                    if (htmlNodeCollection != null)
                     {
                         foreach (HtmlNode element in htmlNodeCollection)
                         {
@@ -77,7 +54,12 @@ namespace Zakamichi_BlogCrawler.Zakamichi
                         break;
                     }
                 }
-            });
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error on Page {currentPage}: {ex.Message}");
+                    break;
+                }
+            }
         }
 
         private static bool ProcessBlog(HtmlNode element, int currentPage)
@@ -85,43 +67,69 @@ namespace Zakamichi_BlogCrawler.Zakamichi
             DateTime start = DateTime.Now;
             string blogPath = $"{Sakurazaka46_HomePage}{element.Descendants("a").First().Attributes["href"].Value}";
             string blogMemberName = GetElementInnerText(element, "p", "class", "name").Trim().Replace(" ", "");
-            string blogId = GetBlogID(new Uri(blogPath).LocalPath);
+            string blogID = GetBlogID(new Uri(blogPath).LocalPath);
 
-            if (Sakurazaka46_Blogs.All(x => x.ID != blogId))
+            if (!Blogs.ContainsKey(blogID))
             {
-                if (GetHtmlDocument(blogPath)?.DocumentNode.SelectNodes("//div[@class='box-article']") is { } articleCollection)
+                var articleCollection = GetHtmlDocument(blogPath)?.DocumentNode.SelectNodes("//div[@class='box-article']");
+                if (articleCollection != null)
                 {
-                    HtmlNode imageElement = articleCollection.First();
-                    List<string> imageList = imageElement.Descendants("img")
-                                    .Select(e => e.GetAttributeValue("src", null))
-                                    .Where(s => !string.IsNullOrEmpty(s))
-                                    .ToList();
+                    var imageList = articleCollection.First().Descendants("img")
+                                                     .Select(e => e.GetAttributeValue("src", null))
+                                                     .Where(s => !string.IsNullOrEmpty(s))
+                                                     .ToList();
                     string blogDateTime = GetElementInnerText(element, "p", "class", "date wf-a");
                     string blogTitle = GetElementInnerText(element, "h3", "class", "title");
-                    Sakurazaka46_Blogs.Add(new Blog
+
+                    Blog newBlog = new()
                     {
-                        ID = blogId,
+                        ID = blogID,
                         Name = blogMemberName,
                         Title = blogTitle,
                         DateTime = ParseDateTime(blogDateTime, DateFormats[1]),
                         ImageList = imageList
-                    });
-                    DateTime end = DateTime.Now;
-                    TimeSpan diff = end - start;
-                    Console.WriteLine($"Total processing time for {blogMemberName} Blog ID {blogId}: {diff:hh\\:mm\\:ss\\.fff}");
+                    };
+
+                    Blogs[blogID] = newBlog;
+                    newBlogs.Add(newBlog);
+
+                    TimeSpan diff = DateTime.Now - start;
+                    Console.WriteLine($"Blog ID: [{blogID}][{blogMemberName}] Image Count: [{imageList.Count}] Total processing time: [{diff:h\\:mm\\:ss\\.fff}]");
+
+                    return true;
                 }
                 else
                 {
-                    Console.WriteLine($"Not found on Blog Id {blogId} for Member {blogMemberName}");
+                    Console.WriteLine($"Not found on Blog Id {blogID} for Member {blogMemberName}");
                     return false;
                 }
             }
             else
             {
-                Console.WriteLine($"Duplicate Blog Id {blogId} for Member {blogMemberName} found on Page {currentPage}");
+                Console.WriteLine($"Duplicate Blog Id {blogID} for Member {blogMemberName} found on Page {currentPage}");
                 return false;
             }
-            return true;
         }
+
+        //private static void SaveNewBlogs(int threadCount, List<Blog> newBlogs)
+        //{
+
+
+        //    int blogsPerThread = Math.Max(newBlogs.Count / threadCount, newBlogs.Count % threadCount);
+
+        //    List<Thread> mainThreads = Enumerable.Range(0, threadCount).Select(i => new Thread(() =>
+        //    {
+        //        List<Blog> threadBlogs = newBlogs.Skip(i * blogsPerThread).Take(blogsPerThread).ToList();
+        //        if (threadBlogs.Count != 0)
+        //        {
+        //            SaveBlogAllImage(threadBlogs, Sakurazaka46_Images_FilePath, string.Empty);
+        //        }
+        //    })).ToList();
+
+        //    StartAndJoinThreads(mainThreads);
+        //}
+
+
+
     }
 }
